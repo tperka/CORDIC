@@ -1,15 +1,14 @@
 .data
-text_initial:		.asciiz "Podaj wartoœæ k¹ta (wspó³czynnik a w a*PI) dla którego chcesz obliczyæ sinus: \n"
-
-result_1:		.asciiz "sin("
-result_2:		.asciiz ") = "
+text_initial:		.asciiz "Podaj wartosc kata (wspolczynnik a w a*PI) dla ktorego chcesz obliczyc sinus (oraz cosinus): \n"
+result_1:		.asciiz "sinus tego kata wynosi: "
+result_2:		.asciiz "\ncosinus tego kata wynosi: "
 scale:			.float 1073741824.0	#2^30 scale, as we using first one bit for sign, one bit for 1 or 0 and rest for fractions
-pi:			.float 3373259426.0
-half:			.word 1073741824
+pi:			.float 3373259426.0	#pi value after appling scale
+half:			.float 0.5
 cordic_K_value:		.word 652032874		#limited precision, no sense in creating lookup table
-negative_half_pi:	.word 0xE0000000
-error_out_of_range:	.asciiz "Poda³eœ wartoœæ spoza zasiêgu!"
-arctan_tab:	.word	#arctan(2^(-i)) lookup table after appling scale
+negative_half:		.float -0.5
+error_out_of_range:	.asciiz "Podaï¿½eï¿½ wartoï¿½ï¿½ spoza zasiï¿½gu!"
+arctan_tab:		.word	#arctan(2^(-i)) lookup table after appling scale
 	843314856
 	497837829
 	263043836
@@ -49,23 +48,20 @@ main:
 	la $a0, text_initial
 	li $v0, 4
 	syscall
-	li $v0, 5
+	li $v0, 6
 	syscall
-	move $s0, $v0
-	li $s6, 1073741824
-	li $s7, 0xe0000000
+	l.s $f1, half
+	l.s $f2, negative_half
 	
 check_range:
-	bgt $s0,$s6, above_range
-	blt $s0,$s7, below_range
+	c.lt.s $f1,$f0
+	bc1t above_range
+	c.lt.s $f0,$f2
+	bc1t below_range
 	
 prepare_angle:
-	mtc1 $s0, $f0
-	cvt.s.w $f0, $f0
-	l.s $f2, pi
-	l.s $f1, scale
-	div.s $f0, $f0, $f1
-	mul.s $f0, $f0, $f2
+	l.s $f1, pi
+	mul.s $f0, $f0, $f1
 	cvt.w.s $f0, $f0
 	mfc1 $s0, $f0
 	
@@ -110,35 +106,41 @@ above_zero:
 	b loop
 
 above_range:
-	li $t2, 0x40000000
-	sub $s0, $t2, $s0
-	bgt $s0, $s6, above_range
+	add.s $f3, $f1, $f1		#1 float
+	sub.s $f0, $f3, $f0
+	c.lt.s $f1, $f0
+	bc1t above_range
 	b check_range
 	
 below_range:
-	li $t2, 0xD0000000
-	sub $s0, $t2, $s0
-	blt $s0, $s7, below_range
+	add.s $f4, $f2, $f2		#-1 float
+	sub.s $f0, $f4, $f0
+	c.lt.s $f0, $f2
+	bc1t below_range
 	b check_range
 
 display_results:
+	mtc1 $s3, $f12		#preparing sin value
+	cvt.s.w $f12, $f12
+	l.s $f2, scale
+	div.s $f12, $f12, $f2
+	
 	la $a0, result_1
 	li $v0, 4
 	syscall
-	mtc1 $s0, $f12
 	li $v0, 2
 	syscall
+	
+	mtc1 $s2, $f12		#preparing cos value
+	cvt.s.w $f12, $f12
+	div.s $f12, $f12, $f2
+	
 	la $a0, result_2
 	li $v0, 4
 	syscall
-	
-	mtc1 $s3, $f0
-	cvt.s.w $f0, $f0
-	l.s $f2, scale
-	div.s $f12, $f0, $f2
-	
 	li $v0, 2
 	syscall
+	
 end:
 	li $v0, 10
 	syscall
